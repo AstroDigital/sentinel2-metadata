@@ -14,6 +14,6 @@ script: echo "do nothing!"
 deploy:
   - provider: script
     skip_cleanup: true
-    script: "./deploy.sh updater 1"
+    script: "./deploy.sh"
     on:
       branch: ad-master
