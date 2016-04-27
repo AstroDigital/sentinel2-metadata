@@ -1,3 +1,4 @@
+import os
 import subprocess
 from iron_worker import IronWorker
 
@@ -5,26 +6,24 @@ from iron_worker import IronWorker
 def main():
     payload = IronWorker.payload()
 
-    if 'es-host' not in payload:
-        raise Exception('elastic search host is missing')
+    args = payload.get('args')
 
-    host = payload['es-host']
-    port = payload.get('es-port', 80)
-    start = payload.get('start-date', None)
-    end = payload.get('end-date', None)
+    aws_id = payload.get('aws-access-id')
+    aws_secret = payload.get('aws-secret-key')
 
-    cmd = ['python', 'main.py',
-           'es', '--verbose',
-           '--es-host', host,
-           '--es-port', port]
+    cmd = ['python', 'main.py']
 
-    if start:
-        cmd.extend(['--start', start])
+    if not args:
+        raise Exception('args is missing')
 
-    if end:
-        cmd.extend(['--end', end])
+    cmd.extend(args.split(' '))
 
-    subprocess(cmd)
+    if not (aws_id and aws_secret):
+        raise Exception('missing argument. aws-access-id and aws-secret-key are required')
+
+    os.environ['AWS_ACCESS_KEY_ID'] = aws_id
+    os.environ['AWS_SECRET_ACCESS_KEY'] = aws_secret
+    subprocess.call(cmd)
 
 if __name__ == '__main__':
     main()
