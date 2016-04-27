@@ -1,0 +1,17 @@
+env:
+  global:
+  - secure: YzO+BToQAmfpqU4T25NUTAR19FdCaRBgL27zLr2C2cftdkqWSVOZm7FW1MrXAi7gmiHfs5VsoiooDkR6w8ixyk/4t1/y/YHlQk2RtfDiw0O9Xhsk/UeenMat43nyRbu9otV+mBArVCSKxHYT0xn2DzXb7R/GFyrEht5EEBXXT1miKTcAFooiFRxL/qP0AZG+6711kgre0dKF5IMGVp/9JoBZQgf6UOq/VJt84NpmpW+QgGMeCfOUWY0V58nKgBe5ACPD+TbEYdgzXWiR1rNIJikcbHsywys9DxnRaBF/BzV9c13T6K2oWllJGkH2eM48gmY+TjgEfu+dgW0iDGhZJxSqoa4hVSDJitgUkW92oXSK2Vsp6qw1kxaD6MCG66aGKqFyvgl3fLpVvA0kgL5M+MCn2kvL2F3cKNaK6n3mvcNXqiLM+ZIV8VDeG/KuiuEznpJYJdO02aQeBaaHqbjGraClqNkz2ZkN7l3Pg7TtHpSdPklssilIohH5L5N11PgaGEvK3EkqPkNxWj7dEcZ/dj8JeBtpxakCTqJ6dQuDlOClF2hK0wC5udQs56Nw/r4GyaoFGi0nzEakzOYa4iW05dubRHlrAXLqScT5kTzlMue5Bj0ls9X3p9RnWtwqyxH8WR8t233XYT7ic7Gmi8zScE5qolSghW0k54j83nj0Q1g=
+  - secure: QcG8PM8IXteiee+yRbCNipf9TM3GDT/dh0yxpHjf9tRn+jdrddaU/P3EVFFXpCZuBaoVb86fvGnOFYTiuQ16BxOHPCRm81jbWVzqMtfGSqv6/w7YQbi0SY1JGbT9Knl/YcJTySwHVRQjFWgohOt1Swo9nSW2WQYMcy6FDlr3ZaN+sgFroSqDXEULsix6uXqlV5ExlpUK2YD/9ua/OReoNHO2Fuk7gWQBAOyYrJtmmwyjv+sCFAPXN6xX4cf5cDpE7vRb8VzPW6bFN+9F92b+lNefr4sPSH8m7arvo7C1LMi1+xIpKRkdPwTxWt/oS0ZWvdIpo2cmcDmXunCIDm4QrgvO7a3wM+rilojrFb3mufjWJcpxX05ia/2ZCYHsBgAz82oVXbP14zxRbP13KALdj3rwi5K2GodWBMhPKwIA2UEIlwfOG43nsh4QZFiOv7Vd0UU1i1Iqv5bpdAS3hgEd6mZyioGsVHrEFwZvNptFCexeOEnFAMsmZOHcz1q9S48/aRz3C9jha49/V+HP9w3KBRgyWFFqVjkZvtNfPPnJL3LKq8erONWdEcav+pTspZ/NATZ4BUCfwPTgJKj0o9yty9tBbQdWdsli6E/8/U/0eVy87ki1rxGr6R3Y1C2/t3OYlEa/35mi18yU7ccvnFSAQHg3QBS+y+p5cpAZGqLAiVU=
+
+
+install:
+  - curl -sSL http://get.iron.io/cli | sh
+
+script: echo "do nothing!"
+
+deploy:
+  - provider: script
+    skip_cleanup: true
+    script: "./deploy.sh updater 1"
+    on:
+      branch: ad-master
