@@ -7,6 +7,7 @@ from copy import copy
 from collections import OrderedDict
 from datetime import datetime, date, timedelta
 from sentinel_s3 import range_metadata, single_metadata
+from thumbs import thumbnail_writer
 
 from elasticsearch import Elasticsearch, RequestError
 
@@ -170,7 +171,7 @@ def geometry_check(meta):
 
 
 @click.command()
-@click.argument('ops', metavar='<operations: choices: s3 | es | disk>', nargs=-1)
+@click.argument('ops', metavar='<operations: choices: s3 | es | disk | thumbs>', nargs=-1)
 @click.option('--product', default=None, help='Product name. If given only the given product is processed.')
 @click.option('--start', default=None, help='Start Date. Format: YYYY-MM-DD')
 @click.option('--end', default=None, help='End Date. Format: YYYY-MM-DD')
@@ -187,7 +188,8 @@ def main(ops, product, start, end, concurrency, es_host, es_port, folder, verbos
     accepted_args = {
         'es': elasticsearch_updater,
         's3': s3_writer,
-        'disk': file_writer
+        'disk': file_writer,
+        'thumbs': thumbnail_writer
     }
 
     writers = []
