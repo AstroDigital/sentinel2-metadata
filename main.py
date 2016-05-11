@@ -272,7 +272,7 @@ def main(ops, product, start, end, concurrency, es_host, es_port, folder, verbos
         if start:
             start = convert_date(start)
         else:
-            delta = timedelta(days=3)
+            delta = timedelta(days=1)
             start = end - delta
 
         if 'es' in ops or 'thumbs' in ops:
