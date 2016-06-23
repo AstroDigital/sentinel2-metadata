@@ -53,7 +53,7 @@ def meta_constructor(metadata):
         metadata['utm_zone'],
         metadata['latitude_band'],
         metadata['grid_square'],
-        int(metadata['path'].split('/')[-1])
+        int(metadata['aws_path'].split('/')[-1])
     )
 
     body = OrderedDict([
@@ -109,7 +109,7 @@ def thumbnail_writer(product_dir, metadata):
             # Build up output file name
             output_file = str(metadata['utm_zone']) + metadata['latitude_band'] + \
                 metadata['grid_square'] + str(metadata['date'].replace('-', '')) + \
-                metadata['path'][-1] + '.jpg'
+                metadata['aws_path'][-1] + '.jpg'
 
             # Copy and update profile
             profile = {
