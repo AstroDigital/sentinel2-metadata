@@ -1,0 +1,9 @@
+sentinel2:
+  image: 'astrodigital/sat-api-updater:v0.4.4'
+  command: 'python main.py thumbs --verbose --es-host search-sat-api-ctavgi2lckfpzk6qxjl6zqnrci.us-east-1.es.amazonaws.com --es-port 80 --concurrency 50'
+  working_dir: /ad
+  volumes:
+    - '.:/ad'
+  environment:
+    - AWS_ACCESS_KEY_ID=xxxxxx
+    - AWS_SECRET_ACCESS_KEY=xxxxxx
