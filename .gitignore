@@ -12,3 +12,5 @@ MANIFEST
 .tox
 .coverage
 .cache
+*.zip
+payload.json
