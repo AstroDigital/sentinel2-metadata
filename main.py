@@ -4,6 +4,8 @@ import boto3
 import click
 import logging
 from copy import copy
+import boto
+from boto.s3.key import Key
 from collections import OrderedDict
 from datetime import datetime, date, timedelta
 from sentinel_s3 import range_metadata, single_metadata
@@ -12,7 +14,6 @@ import rasterio
 from elasticsearch import Elasticsearch, RequestError
 
 bucket_name = os.getenv('BUCKETNAME', 'sentinel-meta')
-thumbs_bucket_name = os.getenv('THUMBS_BUCKETNAME', 'ad-thumbnails')
 s3 = boto3.resource('s3')
 es_index = 'sat-api'
 es_type = 'sentinel2'
@@ -98,6 +99,7 @@ def thumbnail_writer(product_dir, metadata):
     # from main import elasticsearch_updater
     # Download original thumbnail
     orig_url = metadata['thumbnail']
+    thumbs_bucket_name = os.getenv('THUMBS_BUCKETNAME', 'ad-thumbnails')
 
     # Use GDAL to convert to jpg
     with rasterio.drivers():
@@ -110,8 +112,14 @@ def thumbnail_writer(product_dir, metadata):
                 metadata['path'][-1] + '.jpg'
 
             # Copy and update profile
-            profile = src.profile
-            profile.update(driver='JPEG')
+            profile = {
+                'count': 3,
+                'dtype': 'uint8',
+                'driver': 'JPEG',
+                'height': src.height,
+                'width': src.width,
+                'nodata': 0
+            }
 
             # Write to output jpeg
             with rasterio.open(output_file, 'w', **profile) as dst:
@@ -120,9 +128,15 @@ def thumbnail_writer(product_dir, metadata):
                 dst.write_band(3, b)
 
     # Upload thumbnail to S3
-    s3.Object(thumbs_bucket_name, output_file).put(Body=open(output_file),
-                                                   ACL='public-read',
-                                                   ContentType='image/jpeg')
+    try:
+        print('uploading %s' % output_file)
+        c = boto.connect_s3()
+        b = c.get_bucket(thumbs_bucket_name)
+        k = Key(b, name=output_file)
+        k.set_metadata('Content-Type', 'image/jpeg')
+        k.set_contents_from_file(open(output_file), policy='public-read')
+    except Exception as e:
+        print(e)
 
     # Delete thumbnail and associated files
     if os.path.exists(output_file):
