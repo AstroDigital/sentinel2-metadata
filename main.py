@@ -110,8 +110,14 @@ def thumbnail_writer(product_dir, metadata):
                 metadata['path'][-1] + '.jpg'
 
             # Copy and update profile
-            profile = src.profile
-            profile.update(driver='JPEG')
+            profile = {
+                'count': 3,
+                'dtype': 'uint8',
+                'driver': 'JPEG',
+                'height': src.height,
+                'width': src.width,
+                'nodata': 0}
+
 
             # Write to output jpeg
             with rasterio.open(output_file, 'w', **profile) as dst:
