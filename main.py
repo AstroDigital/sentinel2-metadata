@@ -7,10 +7,12 @@ from copy import copy
 from collections import OrderedDict
 from datetime import datetime, date, timedelta
 from sentinel_s3 import range_metadata, single_metadata
+import rasterio
 
 from elasticsearch import Elasticsearch, RequestError
 
 bucket_name = os.getenv('BUCKETNAME', 'sentinel-meta')
+thumbs_bucket_name = os.getenv('THUMBS_BUCKETNAME', 'ad-thumbnails')
 s3 = boto3.resource('s3')
 es_index = 'sat-api'
 es_type = 'sentinel2'
@@ -71,13 +73,13 @@ def meta_constructor(metadata):
 
 
 def elasticsearch_updater(product_dir, metadata):
-
     try:
         body = meta_constructor(metadata)
 
         try:
             es.index(index=es_index, doc_type=es_type, id=body['scene_id'],
                      body=body)
+            print 'Saved: ' + body['scene_id']
         except RequestError:
             body['data_geometry'] = None
             es.index(index=es_index, doc_type=es_type, id=body['scene_id'],
@@ -85,6 +87,53 @@ def elasticsearch_updater(product_dir, metadata):
     except Exception as e:
         print('Unhandled error occured while writing to elasticsearch')
         print('Details: %s' % e.__str__())
+
+
+def thumbnail_writer(product_dir, metadata):
+    """
+    Extra function to convert images to JPEG, then upload to S3 and call
+    the ES metadata writer afterwards.
+    """
+
+    # from main import elasticsearch_updater
+    # Download original thumbnail
+    orig_url = metadata['thumbnail']
+
+    # Use GDAL to convert to jpg
+    with rasterio.drivers():
+        with rasterio.open(orig_url) as src:
+            r, g, b = src.read()
+
+            # Build up output file name
+            output_file = str(metadata['utm_zone']) + metadata['latitude_band'] + \
+                metadata['grid_square'] + str(metadata['date'].replace('-', '')) + \
+                metadata['path'][-1] + '.jpg'
+
+            # Copy and update profile
+            profile = src.profile
+            profile.update(driver='JPEG')
+
+            # Write to output jpeg
+            with rasterio.open(output_file, 'w', **profile) as dst:
+                dst.write_band(1, r)
+                dst.write_band(2, g)
+                dst.write_band(3, b)
+
+    # Upload thumbnail to S3
+    s3.Object(thumbs_bucket_name, output_file).put(Body=open(output_file),
+                                                   ACL='public-read',
+                                                   ContentType='image/jpeg')
+
+    # Delete thumbnail and associated files
+    if os.path.exists(output_file):
+        os.remove(output_file)
+    if os.path.exists(output_file + '.aux.xml'):
+        os.remove(output_file + '.aux.xml')
+
+    # Update metadata record
+    metadata['thumbnail'] = 'https://' + thumbs_bucket_name + \
+        '.s3.amazonaws.com/' + output_file
+    elasticsearch_updater(product_dir, metadata)
 
 
 def file_writer(product_dir, metadata):
@@ -170,7 +219,7 @@ def geometry_check(meta):
 
 
 @click.command()
-@click.argument('ops', metavar='<operations: choices: s3 | es | disk>', nargs=-1)
+@click.argument('ops', metavar='<operations: choices: s3 | es | disk | thumbs>', nargs=-1)
 @click.option('--product', default=None, help='Product name. If given only the given product is processed.')
 @click.option('--start', default=None, help='Start Date. Format: YYYY-MM-DD')
 @click.option('--end', default=None, help='End Date. Format: YYYY-MM-DD')
@@ -187,7 +236,8 @@ def main(ops, product, start, end, concurrency, es_host, es_port, folder, verbos
     accepted_args = {
         'es': elasticsearch_updater,
         's3': s3_writer,
-        'disk': file_writer
+        'disk': file_writer,
+        'thumbs': thumbnail_writer
     }
 
     writers = []
@@ -222,10 +272,10 @@ def main(ops, product, start, end, concurrency, es_host, es_port, folder, verbos
         if start:
             start = convert_date(start)
         else:
-            delta = timedelta(days=3)
+            delta = timedelta(days=1)
             start = end - delta
 
-        if 'es' in ops:
+        if 'es' in ops or 'thumbs' in ops:
             global es
             es = Elasticsearch([{
                 'host': es_host,
