@@ -13,4 +13,6 @@ MANIFEST
 .coverage
 .cache
 *.zip
+*.jpg
+*.jpg.aux.xml
 payload.json
