@@ -5,6 +5,7 @@ import click
 import logging
 from copy import copy
 import boto
+import requests
 from boto.s3.key import Key
 from collections import OrderedDict
 from datetime import datetime, date, timedelta
@@ -101,52 +102,62 @@ def thumbnail_writer(product_dir, metadata):
     orig_url = metadata['thumbnail']
     thumbs_bucket_name = os.getenv('THUMBS_BUCKETNAME', 'ad-thumbnails')
 
-    # Use GDAL to convert to jpg
-    with rasterio.drivers():
-        with rasterio.open(orig_url) as src:
-            r, g, b = src.read()
+    # Build up output file name
+    output_file = str(metadata['utm_zone']) + metadata['latitude_band'] + \
+        metadata['grid_square'] + str(metadata['date'].replace('-', '')) + \
+        metadata['aws_path'][-1] + '.jpg'
 
-            # Build up output file name
-            output_file = str(metadata['utm_zone']) + metadata['latitude_band'] + \
-                metadata['grid_square'] + str(metadata['date'].replace('-', '')) + \
-                metadata['aws_path'][-1] + '.jpg'
+    thumbnail = 'https://' + thumbs_bucket_name + '.s3.amazonaws.com/' + output_file
 
-            # Copy and update profile
-            profile = {
-                'count': 3,
-                'dtype': 'uint8',
-                'driver': 'JPEG',
-                'height': src.height,
-                'width': src.width,
-                'nodata': 0
-            }
+    # check if outputfile exists
+    r = requests.get(thumbnail)
+    if r.status_code != 200:
 
-            # Write to output jpeg
-            with rasterio.open(output_file, 'w', **profile) as dst:
-                dst.write_band(1, r)
-                dst.write_band(2, g)
-                dst.write_band(3, b)
+        # Use GDAL to convert to jpg
+        with rasterio.drivers():
+            with rasterio.open(orig_url) as src:
+                r, g, b = src.read()
 
-    # Upload thumbnail to S3
-    try:
-        print('uploading %s' % output_file)
-        c = boto.connect_s3()
-        b = c.get_bucket(thumbs_bucket_name)
-        k = Key(b, name=output_file)
-        k.set_metadata('Content-Type', 'image/jpeg')
-        k.set_contents_from_file(open(output_file), policy='public-read')
-    except Exception as e:
-        print(e)
+                # Build up output file name
+                output_file = str(metadata['utm_zone']) + metadata['latitude_band'] + \
+                    metadata['grid_square'] + str(metadata['date'].replace('-', '')) + \
+                    metadata['aws_path'][-1] + '.jpg'
 
-    # Delete thumbnail and associated files
-    if os.path.exists(output_file):
-        os.remove(output_file)
-    if os.path.exists(output_file + '.aux.xml'):
-        os.remove(output_file + '.aux.xml')
+                # Copy and update profile
+                profile = {
+                    'count': 3,
+                    'dtype': 'uint8',
+                    'driver': 'JPEG',
+                    'height': src.height,
+                    'width': src.width,
+                    'nodata': 0
+                }
+
+                # Write to output jpeg
+                with rasterio.open(output_file, 'w', **profile) as dst:
+                    dst.write_band(1, r)
+                    dst.write_band(2, g)
+                    dst.write_band(3, b)
+
+        # Upload thumbnail to S3
+        try:
+            print('uploading %s' % output_file)
+            c = boto.connect_s3()
+            b = c.get_bucket(thumbs_bucket_name)
+            k = Key(b, name=output_file)
+            k.set_metadata('Content-Type', 'image/jpeg')
+            k.set_contents_from_file(open(output_file), policy='public-read')
+        except Exception as e:
+            print(e)
+
+        # Delete thumbnail and associated files
+        if os.path.exists(output_file):
+            os.remove(output_file)
+        if os.path.exists(output_file + '.aux.xml'):
+            os.remove(output_file + '.aux.xml')
 
     # Update metadata record
-    metadata['thumbnail'] = 'https://' + thumbs_bucket_name + \
-        '.s3.amazonaws.com/' + output_file
+    metadata['thumbnail'] = thumbnail
     elasticsearch_updater(product_dir, metadata)
 
 
