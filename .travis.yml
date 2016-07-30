@@ -10,10 +10,3 @@ install:
   - curl -sSL http://get.iron.io/cli | sh
 
 script: echo "do nothing!"
-
-deploy:
-  - provider: script
-    skip_cleanup: true
-    script: "./deploy.sh"
-    on:
-      branch: ad-master
