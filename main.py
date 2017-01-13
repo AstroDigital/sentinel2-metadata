@@ -127,6 +127,23 @@ def meta_constructor(metadata):
     return body
 
 
+def dynamodb_updater(product_dir, metadata, **kwargs):
+    client = boto3.client('dynamodb', region_name='us-east-1')
+    client.put_item(
+        TableName='sentinel',
+        Item={
+            'scene_id': {
+                'S': metadata['scene_id']
+            },
+            'body': {
+                'S': json.dumps(metadata)
+            }
+        }
+    )
+
+    print('Posted %s to DynamoDB' % metadata['sceneID'])
+
+
 def elasticsearch_updater(product_dir, metadata):
     try:
         body = meta_constructor(metadata)
@@ -142,6 +159,9 @@ def elasticsearch_updater(product_dir, metadata):
     except Exception as e:
         print('Unhandled error occured while writing to elasticsearch')
         print('Details: %s' % e.__str__())
+
+    dynamodb_updater(product_dir, body)
+    print('saved %s to DynamoDB' % body['scene_id'])
 
 
 def thumbnail_writer(product_dir, metadata):
@@ -306,7 +326,7 @@ def geometry_check(meta):
 @click.option('--es-port', default=9200, type=int, help='Elasticsearch port number')
 @click.option('--folder', default='.', help='Destination folder if is written to disk')
 @click.option('-v', '--verbose', is_flag=True)
-def main(ops, product, start, end, concurrency, es_host, es_port, aws, nothumbnail, folder, verbose):
+def main(ops, product, start, end, concurrency, es_host, es_port, folder, verbose):
 
     if not ops:
         raise click.UsageError('No Argument provided. Use --help if you need help')
@@ -355,7 +375,7 @@ def main(ops, product, start, end, concurrency, es_host, es_port, aws, nothumbna
 
         if 'es' in ops or 'thumbs' in ops:
             global es
-            es = connection_to_es(es_host, es_port, aws=aws)
+            es = connection_to_es(es_host, es_port, aws=True)
 
             create_index(es_index, es_type)
 
