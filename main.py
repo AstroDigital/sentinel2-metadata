@@ -9,15 +9,68 @@ import requests
 from boto.s3.key import Key
 from collections import OrderedDict
 from datetime import datetime, date, timedelta
+from requests_aws4auth import AWS4Auth
 from sentinel_s3 import range_metadata, single_metadata
 import rasterio
 
-from elasticsearch import Elasticsearch, RequestError
+from elasticsearch import Elasticsearch, RequestError, RequestsHttpConnection
 
 bucket_name = os.getenv('BUCKETNAME', 'sentinel-meta')
 s3 = boto3.resource('s3')
 es_index = 'sat-api'
 es_type = 'sentinel2'
+
+
+def get_url(url, j=False):
+    req = urllib2.Request(url)
+    r = urllib2.urlopen(req).read()
+    if j:
+        obj = json.loads(r)
+    else:
+        obj = r
+    return obj
+
+
+def get_role():
+    url = 'http://169.254.169.254/latest/meta-data/iam/security-credentials/'
+    obj = get_url(url)
+    return obj
+
+
+def get_credentials():
+    role = get_role()
+    url = 'http://169.254.169.254/latest/meta-data/iam/security-credentials/' + role
+    obj = get_url(url, True)
+    return obj
+
+
+def connection_to_es(es_host, es_port, aws=False):
+
+    args = {}
+
+    if aws:
+        cred = get_credentials()
+
+        access_key = cred['AccessKeyId']
+        secret_access = cred['SecretAccessKey']
+        token = cred['Token']
+        region = os.getenv('AWS_DEFAULT_REGION', 'us-east-1')
+        awsauth = AWS4Auth(access_key, secret_access, region, 'es',
+                           session_token=token)
+
+        args = {
+            'http_auth': awsauth,
+            'use_ssl': True,
+            'verify_certs': True,
+            'connection_class': RequestsHttpConnection
+        }
+
+    es = Elasticsearch(hosts=[{
+        'host': es_host,
+        'port': es_port
+    }], **args)
+
+    return es
 
 
 def create_index(index_name, doc_type):
@@ -110,51 +163,51 @@ def thumbnail_writer(product_dir, metadata):
     thumbnail = 'https://' + thumbs_bucket_name + '.s3.amazonaws.com/' + output_file
 
     # check if outputfile exists
-    r = requests.get(thumbnail)
-    if r.status_code != 200:
+    # r = requests.get(thumbnail)
+    # if r.status_code != 200:
 
-        # Use GDAL to convert to jpg
-        with rasterio.drivers():
-            with rasterio.open(orig_url) as src:
-                r, g, b = src.read()
+    #     # Use GDAL to convert to jpg
+    #     with rasterio.drivers():
+    #         with rasterio.open(orig_url) as src:
+    #             r, g, b = src.read()
 
-                # Build up output file name
-                output_file = str(metadata['utm_zone']) + metadata['latitude_band'] + \
-                    metadata['grid_square'] + str(metadata['date'].replace('-', '')) + \
-                    metadata['aws_path'][-1] + '.jpg'
+    #             # Build up output file name
+    #             output_file = str(metadata['utm_zone']) + metadata['latitude_band'] + \
+    #                 metadata['grid_square'] + str(metadata['date'].replace('-', '')) + \
+    #                 metadata['aws_path'][-1] + '.jpg'
 
-                # Copy and update profile
-                profile = {
-                    'count': 3,
-                    'dtype': 'uint8',
-                    'driver': 'JPEG',
-                    'height': src.height,
-                    'width': src.width,
-                    'nodata': 0
-                }
+    #             # Copy and update profile
+    #             profile = {
+    #                 'count': 3,
+    #                 'dtype': 'uint8',
+    #                 'driver': 'JPEG',
+    #                 'height': src.height,
+    #                 'width': src.width,
+    #                 'nodata': 0
+    #             }
 
-                # Write to output jpeg
-                with rasterio.open(output_file, 'w', **profile) as dst:
-                    dst.write_band(1, r)
-                    dst.write_band(2, g)
-                    dst.write_band(3, b)
+    #             # Write to output jpeg
+    #             with rasterio.open(output_file, 'w', **profile) as dst:
+    #                 dst.write_band(1, r)
+    #                 dst.write_band(2, g)
+    #                 dst.write_band(3, b)
 
-        # Upload thumbnail to S3
-        try:
-            print('uploading %s' % output_file)
-            c = boto.connect_s3()
-            b = c.get_bucket(thumbs_bucket_name)
-            k = Key(b, name=output_file)
-            k.set_metadata('Content-Type', 'image/jpeg')
-            k.set_contents_from_file(open(output_file), policy='public-read')
-        except Exception as e:
-            print(e)
+    #     # Upload thumbnail to S3
+    #     try:
+    #         print('uploading %s' % output_file)
+    #         c = boto.connect_s3()
+    #         b = c.get_bucket(thumbs_bucket_name)
+    #         k = Key(b, name=output_file)
+    #         k.set_metadata('Content-Type', 'image/jpeg')
+    #         k.set_contents_from_file(open(output_file), policy='public-read')
+    #     except Exception as e:
+    #         print(e)
 
-        # Delete thumbnail and associated files
-        if os.path.exists(output_file):
-            os.remove(output_file)
-        if os.path.exists(output_file + '.aux.xml'):
-            os.remove(output_file + '.aux.xml')
+    #     # Delete thumbnail and associated files
+    #     if os.path.exists(output_file):
+    #         os.remove(output_file)
+    #     if os.path.exists(output_file + '.aux.xml'):
+    #         os.remove(output_file + '.aux.xml')
 
     # Update metadata record
     metadata['thumbnail'] = thumbnail
@@ -253,7 +306,7 @@ def geometry_check(meta):
 @click.option('--es-port', default=9200, type=int, help='Elasticsearch port number')
 @click.option('--folder', default='.', help='Destination folder if is written to disk')
 @click.option('-v', '--verbose', is_flag=True)
-def main(ops, product, start, end, concurrency, es_host, es_port, folder, verbose):
+def main(ops, product, start, end, concurrency, es_host, es_port, aws, nothumbnail, folder, verbose):
 
     if not ops:
         raise click.UsageError('No Argument provided. Use --help if you need help')
@@ -302,10 +355,7 @@ def main(ops, product, start, end, concurrency, es_host, es_port, folder, verbos
 
         if 'es' in ops or 'thumbs' in ops:
             global es
-            es = Elasticsearch([{
-                'host': es_host,
-                'port': es_port
-            }])
+            es = connection_to_es(es_host, es_port, aws=aws)
 
             create_index(es_index, es_type)
 
