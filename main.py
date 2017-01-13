@@ -1,4 +1,5 @@
 import os
+import urllib2
 import json
 import boto3
 import click
