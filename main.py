@@ -142,7 +142,7 @@ def dynamodb_updater(product_dir, metadata, **kwargs):
         }
     )
 
-    print('Posted %s to DynamoDB' % metadata['sceneID'])
+    print('Posted %s to DynamoDB' % metadata['scene_id'])
 
 
 def elasticsearch_updater(product_dir, metadata):
@@ -162,7 +162,6 @@ def elasticsearch_updater(product_dir, metadata):
         print('Details: %s' % e.__str__())
 
     dynamodb_updater(product_dir, body)
-    print('saved %s to DynamoDB' % body['scene_id'])
 
 
 def thumbnail_writer(product_dir, metadata):
